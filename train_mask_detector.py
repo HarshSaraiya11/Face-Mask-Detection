@@ -28,7 +28,6 @@ from imutils import paths
 import numpy as np
 import argparse
 import os
-# from google.colab import drive
 
 INIT_LR = 1e-4
 EPOCHS = 20

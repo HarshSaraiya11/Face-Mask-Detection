@@ -1,3 +1,4 @@
+import datetime
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.models import load_model
@@ -21,9 +22,20 @@ cred = credentials.Certificate("C:/Users/harsh/Downloads/mask-check-d53b8-fireba
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 users_ref = db.collection('users')
+notifications_ref = db.collection('notifications')
+notification_data = {
+    'name': 'name',
+    'profilepicurl': 'url',
+    'email': 'email',
+    'moodle id': 'moodle id',
+    'phone': 'phone',
+    'designation': 'designation',
+    u'time': datetime.datetime.now(tz=datetime.timezone.utc),
+    'text': 'was seen without a mask in college premises on'
+}
 
 
-def sendPush(title, msg, img, registration_token, dataObject):
+def sendPushAndUpdate(title, msg, img, registration_token, dataObject, notification_data):
     # See documentation on defining a message payload.
     message = messaging.MulticastMessage(
         notification=messaging.Notification(
@@ -34,8 +46,13 @@ def sendPush(title, msg, img, registration_token, dataObject):
         data=dataObject,
         tokens=registration_token,
     )
+    # Send a message to the device corresponding to the provided
+    # registration token.
     response = messaging.send_multicast(message)
-
+    # Response is a message ID string.
+    print('Successfully sent message:', response)
+    notifications_ref.add(notification_data)
+    print("Notification Data saved successfully")
 
 
 def detect_and_predict_mask(frame, faceNet, maskNet):
@@ -132,7 +149,6 @@ image7 = face_recognition.load_image_file(
     os.path.abspath("C:/Users/harsh/PycharmProjects/Face-Mask-Detection/recognize/images/vishalsir.png"))
 image7_face_encoding = face_recognition.face_encodings(image7)[0]
 
-
 known_face_encodings = [
     image1_face_encoding,
     image2_face_encoding,
@@ -142,12 +158,13 @@ known_face_encodings = [
     image6_face_encoding,
     image7_face_encoding
 ]
+
 known_face_names = [
     "Saloni Rane",
     "Harsh Saraiya",
     "Prajakta Mhaske",
     "Saurav Hiwanj",
-    "Kiran Deshpande",
+    "Prof Kiran Deshpande",
     "Kaustubh Sawant",
     "Prof Vishal Badgujar"
 ]
@@ -201,7 +218,6 @@ while True:
                     print("Face detected -- {}".format(face_names))
                     total_faces.extend(face_names)
                     total_faces_list = list(dict.fromkeys(total_faces))
-                    # print(total_faces_list)
 
         process_this_frame = not process_this_frame
 
@@ -214,17 +230,18 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
         cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
 
-            # print(j.to_dict())
-
     for i in total_faces_list:
         result = users_ref.where("name", "==", i).get()
         for j in result:
             output = j.to_dict()
-            # print(output)
-            sendPush("ALERT", "{} was caught without a mask!".format(output.get("name")),
-                     output.get("profilepicurl"), token, output)
-            break
-        break
+            print(output)
+            notification_data.update({'name': output.get("name"), 'email': output.get("email"),
+                                      'moodle id': output.get("moodle id"), 'phone': output.get("phone"),
+                                      'designation': output.get("designation"),
+                                      'profilepicurl': output.get("profilepicurl")})
+            sendPushAndUpdate("ALERT", "{} was caught without a mask!".format(output.get("name")),
+                              output.get("profilepicurl"),
+                              token, output, notification_data)
 
     # show the output frame
     cv2.imshow("Frame", frame)
@@ -233,15 +250,6 @@ while True:
     # if the `q` key was pressed, break from the loop
     if key == ord("q"):
         break
-
-# print(total_faces_list)
-# for i in total_faces_list:
-#     result = users_ref.where("name", "==", i).get()
-#     for j in result:
-#         output = j.to_dict()
-#         # print(output)
-#         sendPush("ALERT", "{} was caught without a mask!".format(output.get("name")),
-#                  output.get("profilepicurl"), token, output)
 
 # do a bit of cleanup
 cv2.destroyAllWindows()
